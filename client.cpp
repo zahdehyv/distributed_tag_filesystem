@@ -46,17 +46,42 @@ int main()
 
     // Main Loop
     while(1){
+        // Get command
         std::cout << "Introduzca un comando: ";
-        char message[COMMAND_MAX_SIZE] = { 0 };
-        std::cin >> message;
-        if (strcmp(message, "exit") == 0){
-            std::cout << "Closing this client..." << std::endl;
+        char message[MESSAGE_MAX_SIZE] = { 0 };
+        std::cin.getline(message, MESSAGE_MAX_SIZE);
+        if(strlen(message) == 0) continue;
+
+        // Tokenize command
+        char** tokenized_message = tokenize_command(message);
+        if(!is_message_correct(tokenized_message)){
+            free_token_list(tokenized_message);
+            std::cout << "COMANDO INCORECTO!!!" << std::endl;
+            continue;
+        }
+        
+        // Exit if requested
+        if(tokenized_message[0] != NULL && strcmp(tokenized_message[0], "exit") == 0){
+            std::cout << "Cerrando cliente..." << std::endl;
             break;
         }
+        
+        // Send command
         send(clientSocket, message, strlen(message), 0);
+
+        // Send more info if needed
+        if(tokenized_message[0] != NULL && strcmp(tokenized_message[0], "add") == 0){
+            //TODO
+        }
+        free_token_list(tokenized_message);
+
+        // Receive response
+        char response_message[MESSAGE_MAX_SIZE] = { 0 };
+        recv(clientSocket, response_message, sizeof(response_message), 0);
+        std::cout << response_message << std::endl; 
     }
 
-    // closing socket
+    // Close the socket
     close(clientSocket);
 
     return 0;

@@ -30,21 +30,36 @@ void create_server_and_wait_for_client(int* serverSocket_ptr, int* clientSocket_
     *clientSocket_ptr = accept(*serverSocket_ptr, nullptr, nullptr);
 }
 
+char* execute_command(char* command, int clientSocket){
+    return "lolazo";
+}
+
 int main(){
+    
+    // Connect
     int serverSocket = 0;
     int clientSocket = 0; 
     create_server_and_wait_for_client(&serverSocket, &clientSocket);
 
-    // recieving data
+    // Main Loop
     while(1){
-        char buffer[COMMAND_MAX_SIZE] = { 0 };
-        int err = recv(clientSocket, buffer, sizeof(buffer), 0);
-        if (err == -1){ break; }
-        cout << "Message from client: " << buffer << endl;
+        
+        // Get command
+        char command[MESSAGE_MAX_SIZE] = { 0 };
+        int err = recv(clientSocket, command, sizeof(command), 0);
+        if (err == -1 || command[0] == 0){ break; }
+        cout << "Message from client: " << command << endl;
+
+        //Process command and respond
+        char** tokenized_message = tokenize_command(command);
+        char* response = execute_command(command, clientSocket);
+        free_token_list(tokenized_message);
+        
+        send(clientSocket, response, strlen(response), 0);
     }
 
 
-    // closing the socket.
+    // Close the socket
     close(serverSocket);
 
     return 0;
