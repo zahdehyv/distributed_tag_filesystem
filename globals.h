@@ -1,5 +1,7 @@
 #define MESSAGE_MAX_SIZE 10000
 #define MAX_TOKEN_SIZE 200
+#define SERVER_FILES_FOLDER_NAME "files"
+#define SERVER_TAGS_FOLDER_NAME "file_tags"
 
 //Returns a list of strings, each one a token. The real list ends when a char* = null is found.
 char** tokenize_command(char* command){
@@ -58,15 +60,62 @@ void print_token_list(char** token_list){
     }
 }
 
-void free_token_list(char** token_list){
-    for(int i = 0; i<MESSAGE_MAX_SIZE; i++){
-        free(token_list[i]);
+void free_list_and_members(void** list, int count){
+    for(int i = 0; i<count; i++){
+        free(list[i]);
     }
-    free(token_list);
+    free(list);
+}
+
+void free_token_list(char** token_list){
+    free_list_and_members((void**)token_list, MESSAGE_MAX_SIZE);
+}
+
+void list_fclose(FILE** f_list, int file_count){
+    for(int i = 0; i<file_count; i++){
+        if(f_list[i] != NULL){
+            fclose(f_list[i]);
+        }
+    }
+}
+
+int get_file_size(FILE* descriptor){
+    fseek(descriptor, 0, SEEK_END);
+    int f_size = ftell(descriptor);
+    fseek(descriptor, 0, SEEK_SET);
+    return f_size;
+}
+
+int recv_to_fill(int sock, char* data, int dLen){
+    int last_received = 0;
+    int received = 0;
+    while(received<dLen){
+        last_received = recv(sock, data+received, dLen-received, 0);
+        if (last_received!=-1){
+            received += last_received;
+        }else{
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int send_all(int sock, char* data, int dLen){
+    int last_sended = 0;
+    int sended = 0;
+    while(sended<dLen){
+        last_sended = send(sock, data+sended, dLen-sended, 0);
+        if (last_sended!=-1){
+            sended += last_sended;
+        }else{
+            return -1;
+        }
+    }
+    return 0;
 }
 
 // return the index after the end of the list, or -1 if its not a valid list
-int is_token_list(char** tokenized_message, int start_index, bool check_file_existance = false){
+int is_token_list(char** tokenized_message, int start_index){
     
     if(tokenized_message[start_index] == 0 || strcmp(tokenized_message[start_index], "[") != 0){
         return -1;
@@ -82,8 +131,6 @@ int is_token_list(char** tokenized_message, int start_index, bool check_file_exi
             }else{
                 break;
             }
-        }else if(check_file_existance){
-            //TODO: check_file_existance
         }
         i += 1;
     }
@@ -104,7 +151,7 @@ bool is_message_correct(char** tokenized_message){
             return false;
         }
     }else if(strcmp(tokenized_message[0], "add") == 0){
-        int next_list_start = is_token_list(tokenized_message, 1, true);
+        int next_list_start = is_token_list(tokenized_message, 1);
         if (next_list_start == -1){ return false; }
         
         int end_token_index = is_token_list(tokenized_message, next_list_start);
@@ -112,7 +159,7 @@ bool is_message_correct(char** tokenized_message){
 
         if(tokenized_message[end_token_index] != 0){ return false; }
     }else if(strcmp(tokenized_message[0], "delete") == 0 || strcmp(tokenized_message[0], "list") == 0){
-        int end_token_index = is_token_list(tokenized_message, 1, true);
+        int end_token_index = is_token_list(tokenized_message, 1);
         if (end_token_index == -1){ return false; }
 
         if(tokenized_message[end_token_index] != 0){ return false; }
