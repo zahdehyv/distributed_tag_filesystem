@@ -49,18 +49,23 @@ int main()
     int clientSocket = connect_to_sever_by_name("filesystem_server", "8080");
 
     // Main Loop
-    int debug_messages_sent_count = 0;
+    const char* debug_commands[] = {"add [b.cpp] [lolazo, lolencio]", 
+                                    "add [a.txt] [lolazo, pepe]", 
+                                    "delete-tags [lolazo] [lolencio]",
+                                    "list [lolazo]"};
+    //int debug_command_count = sizeof(debug_commands)/sizeof(char*);
+    int debug_command_count = 0;
+    int debug_command_sent_count = 0;
     while(1){
         // Get command
-        std::cout << "Introduzca un comando: ";
         char message[MESSAGE_MAX_SIZE] = { 0 };
-        if(debug_messages_sent_count == 0){
-            strcpy(message, "add [a.txt] [lolazo, pepe]");
-            debug_messages_sent_count += 1;
-        }else if(debug_messages_sent_count == 1){
-            
-        }
-        else{
+
+        if(debug_command_sent_count < debug_command_count){
+            strcpy(message, debug_commands[debug_command_sent_count]);
+            cout << "Debug Command: " << debug_commands[debug_command_sent_count] << endl;
+            debug_command_sent_count += 1;
+        }else{
+            std::cout << "Introduzca un comando: ";
             std::cin.getline(message, MESSAGE_MAX_SIZE);
         }
         if(strlen(message) == 0) continue;
