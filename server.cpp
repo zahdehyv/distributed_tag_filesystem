@@ -397,8 +397,7 @@ int main(){
     serverAddress.sin_port = htons(8080);
     serverAddress.sin_addr.s_addr = INADDR_ANY;
 
-    bind(serverSocket, (struct sockaddr*)&serverAddress,
-         sizeof(serverAddress));
+    bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
 
     while(1){
         // Connect
@@ -406,13 +405,13 @@ int main(){
         listen(serverSocket, 1);
         clientSocket = accept(serverSocket, nullptr, nullptr);
         
-        Server_Arguments s_a;
-        s_a.clientSocket = clientSocket;
-        s_a.mutex = &mutex;
+        Server_Arguments* s_a = (Server_Arguments*)malloc(sizeof(Server_Arguments));
+        s_a->clientSocket = clientSocket;
+        s_a->mutex = &mutex;
 
         // Connect
         pthread_t thread_id;
-        pthread_create(&thread_id, NULL, server_loop, (void*)&s_a);
+        pthread_create(&thread_id, NULL, server_loop, (void*)s_a);
     }
     
 

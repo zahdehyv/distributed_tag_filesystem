@@ -46,7 +46,7 @@ int connect_to_sever_by_name(const char* name, const char* port){
 
 int connect_to_sever_by_ip(const char* ip, int port){
     while(1){
-        std::cout << "Conectando a servidor de direccion" << ip << "..." << std::endl;
+        std::cout << "Conectando a servidor de direccion " << ip << "..." << std::endl;
 
         int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
 
