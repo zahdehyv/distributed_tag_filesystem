@@ -6,6 +6,7 @@
 #include <netdb.h>
 #include "globals.h"
 #include <stdio.h>
+#include <arpa/inet.h>
 
 using std::cout;
 using std::endl;
@@ -43,10 +44,32 @@ int connect_to_sever_by_name(const char* name, const char* port){
     }
 }
 
+int connect_to_sever_by_ip(const char* ip, int port){
+    while(1){
+        std::cout << "Conectando a servidor de direccion" << ip << "..." << std::endl;
+
+        int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+        struct sockaddr_in address = {};
+        address.sin_family = AF_INET;
+        inet_pton(AF_INET, ip, &address.sin_addr);
+        address.sin_port = htons(port);
+
+        int error = connect(clientSocket, (struct sockaddr*)&address, sizeof(address));
+        if(error!=0){
+            std::cout << "ERROR AL INTENTAR CONECTARSE CON EL SERVIDOR!!!" << std::endl;
+            continue;
+        }else{
+            std::cout << "Conectado!" << std::endl;
+            return clientSocket;
+        }
+    }
+}
+
 int main()
 {
     // Create socket
-    int clientSocket = connect_to_sever_by_name("filesystem_server", "8080");
+    int clientSocket = connect_to_sever_by_ip("10.0.11.2", 8080);
 
     // Main Loop
     const char* debug_commands[] = {"add [b.cpp] [lolazo, lolencio]", 
