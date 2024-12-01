@@ -1,0 +1,1 @@
+sudo docker build . -f ./make_alpine_gcc.dockerfile -t alpine_gcc
