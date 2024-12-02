@@ -76,8 +76,8 @@ int main()
                                     "add [a.txt] [lolazo, pepe]", 
                                     "delete-tags [lolazo] [lolencio]",
                                     "list [lolazo]"};
-    //int debug_command_count = sizeof(debug_commands)/sizeof(char*);
-    int debug_command_count = 0;
+    int debug_command_count = sizeof(debug_commands)/sizeof(char*);
+    //int debug_command_count = 0;
     int debug_command_sent_count = 0;
     while(1){
         // Get command
@@ -144,7 +144,7 @@ int main()
 
             if(error){
                 list_fclose(file_descriptors, file_count);
-                free_list_and_members((void**)file_descriptors, file_count);
+                free(file_descriptors);
                 free_token_list(tokenized_message);
                 continue;
             }
@@ -170,7 +170,6 @@ int main()
                 send_all(clientSocket, file_contents, file_size);
                 free(file_contents);
             }
-            
 
             list_fclose(file_descriptors, file_count);
             free(file_descriptors);
@@ -180,7 +179,7 @@ int main()
 
         // Receive response
         char response_message[MESSAGE_MAX_SIZE] = { 0 };
-        recv(clientSocket, response_message, sizeof(response_message), 0);
+        recv_to_fill(clientSocket, response_message, MESSAGE_MAX_SIZE);
         std::cout << response_message << std::endl;
     }
 

@@ -369,7 +369,7 @@ void* server_loop(void* args){
         // Get command
         cout << "Waiting for new command..." << endl;
         char raw_command[MESSAGE_MAX_SIZE] = { 0 };
-        int err = recv(clientSocket, raw_command, MESSAGE_MAX_SIZE, 0);
+        int err = recv_to_fill(clientSocket, raw_command, MESSAGE_MAX_SIZE);
         if (err == -1 || raw_command[0] == 0){ break; }
         cout << "Command from client: " << raw_command << endl;
 
@@ -378,7 +378,7 @@ void* server_loop(void* args){
         char* response = execute_command(command, clientSocket, mutex);
         free_token_list(command);
         
-        send(clientSocket, response, strlen(response), 0);
+        send_all(clientSocket, response, MESSAGE_MAX_SIZE);
         free(response);
     }
 
