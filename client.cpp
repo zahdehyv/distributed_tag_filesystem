@@ -97,7 +97,7 @@ int main()
         char** tokenized_message = tokenize_command(message);
         if(!is_message_correct(tokenized_message)){
             free_token_list(tokenized_message);
-            std::cout << "COMANDO INCORECTO!!!" << std::endl;
+            std::cout << "COMANDO INCORRECTO!!!" << std::endl;
             continue;
         }
         

@@ -39,7 +39,17 @@ std::vector<char*> get_file_names_from_query(char** command){
         if(strcmp(command[it], "]") == 0){
             break;
         }
-        query_tags.push_back(command[it]);
+
+        bool is_tag_repeated = false;
+        for(int i = 0; i<query_tags.size(); i++){
+            if(strcmp(command[it], query_tags[i]) == 0){
+                is_tag_repeated = true;
+                break;
+            }
+        }
+        if(!is_tag_repeated){
+            query_tags.push_back(command[it]);
+        }
         it += 1;
     }
 
