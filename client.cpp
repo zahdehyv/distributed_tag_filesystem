@@ -70,7 +70,7 @@ int main()
 {
     // Create socket
     int clientSocket = connect_to_sever_by_ip("10.0.11.2", 8080);
-
+    
     // Main Loop
     const char* debug_commands[] = {"add [b.cpp] [lolazo, lolencio]", 
                                     "add [a.txt] [lolazo, pepe]", 
