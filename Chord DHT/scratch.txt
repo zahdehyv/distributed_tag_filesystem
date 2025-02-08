@@ -1,0 +1,95 @@
+/*struct ip_and_port{
+    char* ip;
+    int port;
+};
+void* listen_to_discover(void* args){
+    ip_and_port* args_casted = (ip_and_port*) args;
+
+    //
+    int sock, status;
+    socklen_t socklen = sizeof(struct sockaddr_in);
+    int buffer[1];
+    struct sockaddr_in saddr;
+    struct ip_mreq imreq;
+
+    // set content of struct saddr and imreq to zero
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+    memset(&imreq, 0, sizeof(struct ip_mreq));
+
+    // open a UDP socket
+    sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if ( sock < 0 )
+        perror("Error creating socket"), exit(0);
+
+    saddr.sin_family = PF_INET;
+    saddr.sin_port = htons(args_casted->port); // listen on port
+    saddr.sin_addr.s_addr = htonl(INADDR_ANY); // bind socket to any interface
+    status = bind(sock, (struct sockaddr *)&saddr, sizeof(struct sockaddr_in));
+
+    if ( status < 0 )
+        perror("Error binding socket to interface"), exit(0);
+
+    imreq.imr_multiaddr.s_addr = inet_addr(args_casted->ip);
+    imreq.imr_interface.s_addr = INADDR_ANY; // use DEFAULT interface
+
+    // JOIN multicast group on default interface
+    status = setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (const void *)&imreq, sizeof(struct ip_mreq));
+
+    // receive packet from socket
+    while(true){
+        status = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&saddr, &socklen);
+
+        sockaddr_in* ipv4Addr = (sockaddr_in*) &saddr;
+        printf("lol %s\n", inet_ntoa(ipv4Addr->sin_addr));
+    }
+
+}*/
+
+void ping_some_dht_node(char* ip, int port){
+    int sock, status, socklen;
+    int buffer[1] = {256};
+    struct sockaddr_in saddr;
+    struct in_addr iaddr;
+    unsigned char ttl = 3;
+    unsigned char one = 1;
+
+    // set content of struct saddr and imreq to zero
+    memset(&saddr, 0, sizeof(struct sockaddr_in));
+    memset(&iaddr, 0, sizeof(struct in_addr));
+
+    // open a UDP socket
+    sock = socket(PF_INET, SOCK_DGRAM, 0);
+    if ( sock < 0 )
+        perror("Error creating socket"), exit(0);
+
+    saddr.sin_family = PF_INET;
+    saddr.sin_port = htons(0); // Use the first free port
+    saddr.sin_addr.s_addr = htonl(INADDR_ANY); // bind socket to any interface
+    status = bind(sock, (struct sockaddr *)&saddr, sizeof(struct sockaddr_in));
+
+    if ( status < 0 )
+        perror("Error binding socket to interface"), exit(0);
+
+    iaddr.s_addr = INADDR_ANY; // use DEFAULT interface
+
+    // Set the outgoing interface to DEFAULT
+    setsockopt(sock, IPPROTO_IP, IP_MULTICAST_IF, &iaddr, sizeof(struct in_addr));
+
+    // Set multicast packet TTL to 3; default TTL is 1
+    setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(unsigned char));
+
+    // send multicast traffic to myself too
+    status = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, &one, sizeof(unsigned char));
+    
+    // set destination multicast address
+    saddr.sin_family = PF_INET;
+    saddr.sin_addr.s_addr = inet_addr(ip);
+    saddr.sin_port = htons(port);
+
+    socklen = sizeof(struct sockaddr_in);
+    
+    // send packet
+    status = sendto(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&saddr, socklen);
+
+    
+}
