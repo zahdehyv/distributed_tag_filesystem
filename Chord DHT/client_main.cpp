@@ -14,21 +14,6 @@ using std::endl;
 std::vector<char*> dht_dirs;
 pthread_mutex_t dht_dirs_mutex;
 
-//Returns the message (+ zero at the end)
-int recv_length_then_message(int socket, int* length, char** message){
-    
-    // Receive Size
-    recv_to_fill(socket, (char*)length, sizeof(int));
-
-    // Receive Contents
-    *message = (char*) malloc((*length+1)*sizeof(char));
-    recv_to_fill(socket, *message, *length);
-    message[*length] = 0;
-    
-    // Return
-    return 0;
-}
-
 void* add_dht_node(void* args){
     int client_socket = *(int*)args;
 

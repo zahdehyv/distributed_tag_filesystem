@@ -2,26 +2,23 @@
 #include "globals.h"
 #include <stdlib.h>
 #include <unistd.h>
+#include "rpcs.h"
+#include <net/if.h>
+#include <sys/ioctl.h>
 
-int succesor_key;
-in_addr succesor_ip;
+int node_key = 0;
+in_addr node_ip = {0};
+int successor_key = 0;
+in_addr successor_ip = {0};
+int predecessor_key = 0;
+in_addr predecessor_ip = {0};
+
 Threadsafe_Command_Queue command_queue(10000);
 
-int send_length_then_message(int socket, int size, char* message){
-    //First send size
-    int* size_pointer = &size;
-    send_all(socket, (char*)size_pointer, sizeof(int));
-
-    //Then send the actual file
-    char* file_contents = (char*) malloc(size*sizeof(char));
-    send_all(socket, message, size);
-    return 0;
-}
-
-/*void* command_accept_thread(void* args){
+void* command_accept_thread(void* args){
     //Create Server
     int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-
+    
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(DHT_COMMAND_PORT);
@@ -31,19 +28,19 @@ int send_length_then_message(int socket, int size, char* message){
 
     //Wait for commands
     while(1){
-        listen(serverSocket, 1);
         
-        sockaddr ip;
-        socklen_t a;
-        int clientSocket = accept(serverSocket, &ip, &a);
-        sockaddr_in* ipv4Addr = (sockaddr_in*) &ip;
-        printf("%s\n", inet_ntoa(ipv4Addr->sin_addr));
+        // Listen for connection
+        listen(serverSocket, 1);
+        int clientSocket = accept(serverSocket, nullptr, nullptr);
 
-        pthread_mutex_lock(&dht_dirs_mutex);
-        dht_dirs.push_back(inet_ntoa(ipv4Addr->sin_addr));
-        pthread_mutex_unlock(&dht_dirs_mutex);
+        // Receive and enqueue command
+        Command new_command;
+        new_command.sock = clientSocket;
+        recv_length_then_message(clientSocket, &(new_command.size), &(new_command.message));
+        
+        command_queue.enqueue(new_command);
     }
-}*/
+}
 
 
 
@@ -54,39 +51,42 @@ struct ip_and_port{
 void join_dht(char* ip, int port){
 
     // Create UDP socket
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    int udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
 
     struct sockaddr_in in_addr;
     in_addr.sin_family = AF_INET;
     in_addr.sin_addr.s_addr = INADDR_ANY;
     in_addr.sin_port = htons(port);
 
-    bind(sock, (sockaddr*) &in_addr, sizeof(in_addr));
+    bind(udp_sock, (sockaddr*) &in_addr, sizeof(in_addr));
 
     // Subscribe to the multicast 
     struct ip_mreq mreq;
     mreq.imr_multiaddr.s_addr = inet_addr(ip);
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
 
-    setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq));
+    setsockopt(udp_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq));
 
     // Listen for signals of dht nodes
     int dummy;
     sockaddr recv_saddr;
     socklen_t recv_socklen = sizeof(recv_saddr);
-    recvfrom(sock, &dummy, sizeof(int), 0, (struct sockaddr *)&recv_saddr, &recv_socklen);
+    recvfrom(udp_sock, &dummy, sizeof(int), 0, (struct sockaddr *)&recv_saddr, &recv_socklen);
     
     sockaddr_in* ipv4Addr = (sockaddr_in*) &recv_saddr;
     printf("lol, recv %i from %s\n", dummy, inet_ntoa(ipv4Addr->sin_addr));
 
-    //Find predecesor
-    struct sockaddr_in address = {};
-    address.sin_family = AF_INET;
-    inet_pton(AF_INET, inet_ntoa(ipv4Addr->sin_addr), &address.sin_addr);
-    address.sin_port = htons(DHT_COMMAND_PORT);
+    //Find predecesor and insert itself into the network
+    Node_Reference* pred_reference = rpc_find_predecessor(ipv4Addr->sin_addr, node_key);
+    predecessor_ip = pred_reference->ip;
+    predecessor_key = pred_reference->key;
+    successor_ip = pred_reference->successor_ip;
+    successor_key = pred_reference->successor_key;
 
-    //close(clientSocket);
-    
+    rpc_change_succesor(predecessor_ip, node_ip, node_key);
+    rpc_change_predecessor(successor_ip, node_ip, node_key);
+
+    close(udp_sock);
 }
 
 
@@ -112,23 +112,56 @@ void* ping_dht_nodes(void* raw_args){
         // send packet
         int buffer[1] = {256};
         sendto(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&mcast_addr, sizeof(mcast_addr));
-        sleep(3);
+        usleep(300);
     }
 
+}
+
+in_addr get_self_ip(){
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    ifreq ifr;
+    ifr.ifr_addr.sa_family = AF_INET;
+    strncpy(ifr.ifr_name, "eth0", IFNAMSIZ-1);
+    ioctl(sock, SIOCGIFADDR, &ifr);
+    close(sock);
+
+    in_addr ip = ((sockaddr_in*)&ifr.ifr_addr)->sin_addr;
+    return ip;
+}
+
+bool i_am_predecessor_of_key(int key){
+    if(successor_ip.s_addr == node_ip.s_addr) return true;
+    if(node_key <= predecessor_key){
+        if(node_key < key && predecessor_key > key) return true;
+    }else{
+        if(node_key < key || predecessor_key > key) return true;
+    }
+
+    return false;
 }
 
 // First argument is the name of the folder in which the files are going to be saved
 // Second And Third arguments are broadcast IP and Port of discover port
 // Fourth And Fifth arguments are IP and Port of a known chord node command port
 // Sixth argument says if this is the first node in the DHT (Y or N)
+// Seventh argument is the key for the node 
 int main(int argc, char** argv){
     
     printf("%s\n", argv[6]);
 
-    // Enter the network, find Predecesor and Succesor
+    // Set node key and ip
+    node_key = strtol(argv[7], NULL, 10);
+    node_ip = get_self_ip();
+
+    // Enter the network, set predecessor and successor
     if(strcmp(argv[6], "N") == 0){
         int port = strtol(argv[3], NULL, 10);
         join_dht(argv[2], port);
+    }else{
+        predecessor_ip = node_ip;
+        predecessor_key = node_key;
+        successor_ip = node_ip;
+        successor_key = node_key;
     }
     
     // Create multicast send thread
@@ -138,15 +171,54 @@ int main(int argc, char** argv){
     pthread_t listen_find_thread_id;
     pthread_create(&listen_find_thread_id, NULL, ping_dht_nodes, args);
 
-    
-    // Find succesor, predecesor, and send them commands to enter the network
-
     // Create the thread that accepts commands
-    //pthread_t thread_id;
-    //pthread_create(&thread_id, NULL, add_dht_node, NULL);
+    pthread_t thread_id;
+    pthread_create(&thread_id, NULL, command_accept_thread, NULL);
 
     //Command Execution Loop
     while(true){
-        sleep(1);
+        Command cmd = command_queue.dequeue();
+        printf("Will execute command: %i\n", cmd.message[0]);
+        
+        if(cmd.message[0] == CMD_TEST){
+            char* message = "lolazo";
+            send_length_then_message(cmd.sock, strlen(message)+1, message);
+        }
+        
+        else if(cmd.message[0] == CMD_FIND_PREDECESSOR){
+            int key;
+            memcpy(&key, cmd.message+1, 4);
+
+            Node_Reference* node_reference;
+            if(i_am_predecessor_of_key(key)){
+                node_reference = (Node_Reference*)malloc(sizeof(Node_Reference));
+                node_reference->ip = node_ip;
+                node_reference->key = node_key;
+                node_reference->successor_ip = successor_ip;
+                node_reference->successor_key = successor_key;
+            }else{
+                node_reference = rpc_find_predecessor(successor_ip, key);
+            }
+            
+            send_length_then_message(cmd.sock, sizeof(Node_Reference), (char*)node_reference);
+            free(node_reference);
+        }
+
+        else if(cmd.message[0] == CMD_CHANGE_SUCCESOR){
+            memcpy(&successor_ip, cmd.message+1, sizeof(in_addr));
+            memcpy(&successor_key, cmd.message+1+sizeof(in_addr), sizeof(int));
+            char ok_message = 14;
+            send_length_then_message(cmd.sock, 1, &ok_message);
+            printf("New Succesor is of key %i\n", successor_key);
+        }
+
+        else if(cmd.message[0] == CMD_CHANGE_PREDECESSOR){
+            memcpy(&predecessor_ip, cmd.message+1, sizeof(in_addr));
+            memcpy(&predecessor_key, cmd.message+1+sizeof(in_addr), sizeof(int));
+            char ok_message = 13;
+            send_length_then_message(cmd.sock, 1, &ok_message);
+            printf("New Predecessor is of key %i\n", predecessor_key);
+        }
+
     }
 }

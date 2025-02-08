@@ -1,12 +1,14 @@
 #include <pthread.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #pragma once
 
 class Command{
 public:
-    char* str;
+    char* message; //NOT zero terminated
+    int size;
     int sock;
 };
 
@@ -42,6 +44,8 @@ public:
                 first_ocupied_space = (first_ocupied_space + 1)%total_size;
                 pthread_mutex_unlock(&mutex);
                 break;
+            }else{
+                usleep(100);
             }
             pthread_mutex_unlock(&mutex);
         }
