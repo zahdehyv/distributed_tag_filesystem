@@ -66,19 +66,31 @@ int connect_to_sever_by_ip(const char* ip, int port){
     }
 }
 
-int main()
-{
+int main(){
+    printf("I am a client\n\n");
+
     // Create socket
     int clientSocket = connect_to_sever_by_ip("10.0.11.2", 8080);
     
     // Main Loop
-    const char* debug_commands[] = {"add [b.cpp] [lolazo, lolencio]", 
+    /*const char* debug_commands[] = {"add [b.cpp] [lolazo, lolencio]", 
                                     "add [a.txt] [lolazo, pepe]", 
                                     "delete-tags [lolazo] [lolencio]",
+                                    "list [lolazo]"};*/
+    const char* debug_commands[] = {"add [b.cpp] [lolazo, lolencio]", 
+                                    "add [a.txt] [lolazo, pepe]",
+                                    "add [b.cpp] [lolazo, lolencio]",
+                                    "list [lolazo]",
+                                    "list [lolencio, lolazo]",
+                                    "get [lolazo]",
+                                    "add-tags [lolencio] [lolencio, jaujau]",
                                     "list [lolazo]"};
     int debug_command_count = sizeof(debug_commands)/sizeof(char*);
     //int debug_command_count = 0;
     int debug_command_sent_count = 0;
+
+    sleep(3);
+
     while(1){
         // Get command
         char message[MESSAGE_MAX_SIZE] = { 0 };
@@ -174,13 +186,33 @@ int main()
             list_fclose(file_descriptors, file_count);
             free(file_descriptors);
         }
-        
-        free_token_list(tokenized_message);
 
         // Receive response
         char response_message[MESSAGE_MAX_SIZE] = { 0 };
         recv_to_fill(clientSocket, response_message, MESSAGE_MAX_SIZE);
         std::cout << response_message << std::endl;
+
+        // If the command was a get, receive files
+        if(strcmp(tokenized_message[0], "get") == 0){
+            int count;
+            recv_to_fill(clientSocket, (char*)&count, 4);
+
+            for(int i = 0; i<count; i++){
+                char* file_name = 0;
+                int name_l = 0;
+                recv_length_then_message(clientSocket, &name_l, &file_name);
+
+                char* file_content = 0;
+                int file_size = 0;
+                recv_length_then_message(clientSocket, &file_size, &file_content);
+
+                FILE* file_descriptor = open_file_in_folder(file_name, "dload", "wb");
+                fwrite(file_content, file_size, 1, file_descriptor);
+                fclose(file_descriptor);
+            }
+        }
+
+        free_token_list(tokenized_message);
     }
 
     // Close the socket
