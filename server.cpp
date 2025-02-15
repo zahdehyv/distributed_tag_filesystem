@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include <pthread.h>
 #include "rpcs.h"
+#include <netinet/tcp.h>
 
 using std::cout;
 using std::endl;
@@ -95,7 +96,7 @@ std::vector<char*> get_tag_list(char** command){
 }
 
 void execute_command(char** command, int clientSocket, pthread_mutex_t* mutex){
-    pthread_mutex_lock(mutex);
+    //pthread_mutex_lock(mutex);
     
     char* response = (char*)malloc(MESSAGE_MAX_SIZE);
     memset(response, 0, MESSAGE_MAX_SIZE);
@@ -107,6 +108,8 @@ void execute_command(char** command, int clientSocket, pthread_mutex_t* mutex){
     int* sizes_for_get = 0;
     char** contents_for_get = 0;
     char** names_for_get = 0;
+
+    int err = 0;
 
     if(strcmp(command[0], "add") == 0){
 
@@ -148,11 +151,13 @@ void execute_command(char** command, int clientSocket, pthread_mutex_t* mutex){
         for(int i = 0; i<file_names.size(); i++){
             // Receive File Size
             int file_size = 0;
-            recv_to_fill(clientSocket, (char*)&file_size, sizeof(int));
+            err = recv_to_fill(clientSocket, (char*)&file_size, sizeof(int));
+            if (err == -1) {print_connection_error(); return;}
 
             // Receive File Contents
             char* file_contents = (char*) malloc(file_size*sizeof(char));
-            recv_to_fill(clientSocket, file_contents, file_size);
+            err = recv_to_fill(clientSocket, file_contents, file_size);
+            if (err == -1) {print_connection_error(); return;}
 
             // Write File Contents
             rpc_add(files_dht_ip, file_names[i], file_contents, file_size);
@@ -301,64 +306,6 @@ void execute_command(char** command, int clientSocket, pthread_mutex_t* mutex){
 
         
         strcat(response, "Add-Tags Command Executed Succesfully!");
-
-        /*std::vector<char*> target_file_names = get_file_names_from_query(command);
-        std::vector<char*> command_tag_list = get_tag_list(command);
-
-        for(int i = 0; i<target_file_names.size(); i++){
-            
-            // Read full tags file
-            FILE* tag_file_read = open_file_in_folder(target_file_names[i], SERVER_TAGS_FOLDER_NAME, "rb");
-            int file_size_i = get_file_size(tag_file_read);
-            char* tags_content_i = (char*)malloc((file_size_i+1)*sizeof(char));
-            fread(tags_content_i, file_size_i, 1, tag_file_read);
-            tags_content_i[file_size_i] = 0;
-            fclose(tag_file_read);
-
-            // Get current tags
-            std::vector<char*> new_tag_list;
-            char* tag = strtok(tags_content_i, "\n");
-            while(tag != NULL){
-                new_tag_list.push_back(tag);
-                tag = strtok(NULL, "\n");
-            }
-
-            // Construct new tag list without repeated tags
-            for(int tag_q_index = 0; tag_q_index<command_tag_list.size(); tag_q_index++){
-                
-                //See if tag is aleready in list
-                bool is_repeated = false;
-                for(int j = 0; j<new_tag_list.size(); j++){
-                    if(strcmp(new_tag_list[j], command_tag_list[tag_q_index]) == 0){
-                        is_repeated = true;
-                        break;
-                    }
-                }
-
-                if(!is_repeated){
-                    new_tag_list.push_back(command_tag_list[tag_q_index]);
-                }
-            }
-
-            // Construct and write new tag string
-            int tags_total_size = 0; 
-            for(int j = 0; j<new_tag_list.size(); j++){
-                tags_total_size += strlen(new_tag_list[j]);
-            }
-
-            char* new_tag_file_contents = (char*)malloc(tags_total_size+new_tag_list.size()+1);
-            new_tag_file_contents[0] = 0;
-            for(int j = 0; j<new_tag_list.size(); j++){
-                strcat(new_tag_file_contents, new_tag_list[j]);
-                strcat(new_tag_file_contents, "\n");
-            }
-
-            FILE* tag_file = open_file_in_folder(target_file_names[i], SERVER_TAGS_FOLDER_NAME, "wb");
-            fwrite(new_tag_file_contents, strlen(new_tag_file_contents), 1, tag_file);
-            fclose(tag_file);
-            
-            strcat(response, "Add-Tags Command Executed Succesfully!");
-        }*/
     }else if(strcmp(command[0], "delete-tags") == 0){
         std::vector<char*> target_file_names = get_file_names_from_query(command, tags_to_files_dht_ip);
         std::vector<char*> command_tag_list = get_tag_list(command);
@@ -414,20 +361,24 @@ void execute_command(char** command, int clientSocket, pthread_mutex_t* mutex){
         strcpy(response, "WTF WAS THAT!!!");
     }
 
-    pthread_mutex_unlock(mutex);
+    //pthread_mutex_unlock(mutex);
 
     //Send response
-    send_all(clientSocket, response, MESSAGE_MAX_SIZE);
+    err = send_all(clientSocket, response, MESSAGE_MAX_SIZE);
     free(response);
+    if (err == -1) {print_connection_error(); return;}
 
     // Send files if the command was a get
     if(strcmp(command[0], "get") == 0){
         
-        send_all(clientSocket, (char*)&file_count_for_get, 4);
+        err = send_all(clientSocket, (char*)&file_count_for_get, 4);
+        if (err == -1) {print_connection_error(); return;}
 
         for(int i = 0; i<file_count_for_get; i++){
-            send_length_then_message(clientSocket, strlen(names_for_get[i])+1, names_for_get[i]);
-            send_length_then_message(clientSocket, sizes_for_get[i], contents_for_get[i]);
+            err = send_length_then_message(clientSocket, strlen(names_for_get[i])+1, names_for_get[i]);
+            if (err == -1) {print_connection_error(); return;}
+            err = send_length_then_message(clientSocket, sizes_for_get[i], contents_for_get[i]);
+            if (err == -1) {print_connection_error(); return;}
         }
 
     }
@@ -474,7 +425,7 @@ int main(){
     //Create Server
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(8080);
+    serverAddress.sin_port = htons(MAIN_SERVER_PORT);
     serverAddress.sin_addr.s_addr = INADDR_ANY;
 
     bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
@@ -484,6 +435,12 @@ int main(){
         int clientSocket = 0;
         listen(serverSocket, 1);
         clientSocket = accept(serverSocket, nullptr, nullptr);
+
+        int val = 1;
+        setsockopt(clientSocket, SOL_SOCKET, SO_KEEPALIVE, (char*)&val, sizeof(int));
+        setsockopt(clientSocket, IPPROTO_TCP, TCP_KEEPCNT, (char*)&val, sizeof(int));
+        setsockopt(clientSocket, IPPROTO_TCP, TCP_KEEPIDLE, (char*)&val, sizeof(int));
+        setsockopt(clientSocket, IPPROTO_TCP, TCP_KEEPINTVL, (char*)&val, sizeof(int));
         
         Server_Arguments* s_a = (Server_Arguments*)malloc(sizeof(Server_Arguments));
         s_a->clientSocket = clientSocket;
@@ -494,6 +451,5 @@ int main(){
         pthread_create(&thread_id, NULL, server_loop, (void*)s_a);
     }
     
-
     return 0;
 }

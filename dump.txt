@@ -1,0 +1,32 @@
+int connect_to_sever_by_name(const char* name, const char* port){
+    
+    while(1){
+        int error = 0;
+        std::cout << "Conectando a servidor " << name << "..." << std::endl;
+
+        // Create Socket
+        addrinfo hints;
+        addrinfo *servinfo;
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_UNSPEC;     // don't care IPv4 or IPv6
+        hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
+        hints.ai_flags = 0;     // fill in my IP for me
+        error = getaddrinfo(name, port, &hints, &servinfo);
+        if(error!=0){
+            std::cout << "ERROR OBTENIENDO LA DIRECCION DEL SERVIDOR!!! Codigo de error: " <<  error << std::endl;
+            continue;
+        }
+        
+        int clientSocket = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
+
+        // Connect
+        error = connect(clientSocket, servinfo->ai_addr, servinfo->ai_addrlen);
+        if(error!=0){
+            std::cout << "ERROR AL INTENTAR CONECTARSE CON EL SERVIDOR!!!" << std::endl;
+            continue;
+        }else{
+            std::cout << "Conectado!" << std::endl;
+            return clientSocket;
+        }
+    }
+}

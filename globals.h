@@ -11,10 +11,9 @@
 
 #define MESSAGE_MAX_SIZE 10000
 #define MAX_TOKEN_SIZE 200
-#define SERVER_FILES_FOLDER_NAME "files"
-#define SERVER_TAGS_FOLDER_NAME "file_tags"
+#define MAIN_SERVER_PORT 8080
 
-#define CLIENT_DHT_DISCOVER_PORT 8080
+
 #define DHT_COMMAND_PORT 8080
 
 //Returns a list of strings, each one a token. The real list ends when a char* = null is found.
@@ -105,7 +104,7 @@ int recv_to_fill(int sock, char* data, int dLen){
     int received = 0;
     while(received<dLen){
         last_received = recv(sock, data+received, dLen-received, 0);
-        if (last_received!=-1){
+        if (last_received!=-1 && last_received!=0){
             received += last_received;
         }else{
             return -1;
@@ -119,7 +118,7 @@ int send_all(int sock, const char* data, int dLen){
     int sended = 0;
     while(sended<dLen){
         last_sended = send(sock, data+sended, dLen-sended, 0);
-        if (last_sended!=-1){
+        if (last_sended!=-1 && last_sended!=0){
             sended += last_sended;
         }else{
             return -1;
@@ -193,18 +192,24 @@ bool is_message_correct(char** tokenized_message){
 }
 
 int send_length_then_message(int sock, int size, const char* message){
-    send_all(sock, (char*)&size, sizeof(int));
-    send_all(sock, message, size*sizeof(char));
+    int err = 0;
+    err = send_all(sock, (char*)&size, sizeof(int));
+    if(err != 0) return -1;
+    err = send_all(sock, message, size*sizeof(char));
+    if(err != 0) return -1;
     return 0;
 }
 
 int recv_length_then_message(int sock, int* size, char** message){
-    //First receive size
-    recv_to_fill(sock, (char*)size, sizeof(int));
     
-    //Then send the actual message
+    int err = 0;
+    err = recv_to_fill(sock, (char*)size, sizeof(int));
+    if(err != 0) return -1;
+    
     *message = (char*) malloc((*size)*sizeof(char));
-    recv_to_fill(sock, *message, *size);
+    err = recv_to_fill(sock, *message, *size);
+    if(err != 0) return -1;
+
     return 0;
 }
 
@@ -342,4 +347,8 @@ void list_to_file_lines(std::vector<char*> l, char** contents, int* size){
         (*contents)[current_length] = '\n';
         current_length += 1;
     }
+}
+
+void print_connection_error(){
+    std::cout << "CONNECTION ERROR!!!" << std::endl;
 }

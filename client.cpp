@@ -1,6 +1,8 @@
 #include <cstring>
 #include <iostream>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netdb.h>
@@ -11,77 +13,40 @@
 using std::cout;
 using std::endl;
 
-int connect_to_sever_by_name(const char* name, const char* port){
+int try_connect_to_sever_by_ip(const char* ip, int port){
+    std::cout << "Conectando a servidor de direccion " << ip << "..." << std::endl;
+
+    int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+    struct sockaddr_in address = {};
+    address.sin_family = AF_INET;
+    inet_pton(AF_INET, ip, &address.sin_addr);
+    address.sin_port = htons(port);
     
-    while(1){
-        int error = 0;
-        std::cout << "Conectando a servidor " << name << "..." << std::endl;
+    int val = 1;
+    setsockopt(clientSocket, IPPROTO_TCP, TCP_SYNCNT, &val, sizeof(int));
 
-        // Create Socket
-        addrinfo hints;
-        addrinfo *servinfo;
-        memset(&hints, 0, sizeof hints);
-        hints.ai_family = AF_UNSPEC;     // don't care IPv4 or IPv6
-        hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
-        hints.ai_flags = 0;     // fill in my IP for me
-        error = getaddrinfo(name, port, &hints, &servinfo);
-        if(error!=0){
-            std::cout << "ERROR OBTENIENDO LA DIRECCION DEL SERVIDOR!!! Codigo de error: " <<  error << std::endl;
-            continue;
-        }
-        
-        int clientSocket = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
-
-        // Connect
-        error = connect(clientSocket, servinfo->ai_addr, servinfo->ai_addrlen);
-        if(error!=0){
-            std::cout << "ERROR AL INTENTAR CONECTARSE CON EL SERVIDOR!!!" << std::endl;
-            continue;
-        }else{
-            std::cout << "Conectado!" << std::endl;
-            return clientSocket;
-        }
+    int error = connect(clientSocket, (struct sockaddr*)&address, sizeof(address));
+    if(error!=0){
+        std::cout << "ERROR AL INTENTAR CONECTARSE CON EL SERVIDOR!!!" << std::endl;
+        return -1;
+    }else{
+        std::cout << "Conectado!" << std::endl;
+        return clientSocket;
     }
 }
 
-int connect_to_sever_by_ip(const char* ip, int port){
-    while(1){
-        std::cout << "Conectando a servidor de direccion " << ip << "..." << std::endl;
 
-        int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
 
-        struct sockaddr_in address = {};
-        address.sin_family = AF_INET;
-        inet_pton(AF_INET, ip, &address.sin_addr);
-        address.sin_port = htons(port);
-
-        int error = connect(clientSocket, (struct sockaddr*)&address, sizeof(address));
-        if(error!=0){
-            std::cout << "ERROR AL INTENTAR CONECTARSE CON EL SERVIDOR!!!" << std::endl;
-            continue;
-        }else{
-            std::cout << "Conectado!" << std::endl;
-            return clientSocket;
-        }
-    }
-}
-
+std::vector<const char*> server_ips = {"10.0.11.2", "10.0.11.231"};
 int main(){
     printf("I am a client\n\n");
-
-    // Create socket
-    int clientSocket = connect_to_sever_by_ip("10.0.11.2", 8080);
     
     // Main Loop
-    /*const char* debug_commands[] = {"add [b.cpp] [lolazo, lolencio]", 
-                                    "add [a.txt] [lolazo, pepe]", 
-                                    "delete-tags [lolazo] [lolencio]",
-                                    "list [lolazo]"};*/
-    const char* debug_commands[] = {"add [b.cpp] [lolazo, lolencio]", 
+    const char* debug_commands[] = {"list [lolazo]",
+                                    "add [b.cpp] [lolazo, lolencio]", 
                                     "add [a.txt] [lolazo, pepe]",
-                                    "add [b.cpp] [lolazo, lolencio]",
                                     "list [lolazo]",
-                                    "list [lolencio, lolazo]",
                                     "get [lolazo]",
                                     "add-tags [lolencio] [lolencio, jaujau]",
                                     "list [lolazo]"};
@@ -92,6 +57,24 @@ int main(){
     sleep(3);
 
     while(1){
+        // Connect to a server
+        int clientSocket;
+        int server_ip_index = 0; //Can be selected randomly for simple load balancing
+        while (true){
+            clientSocket = try_connect_to_sever_by_ip(server_ips[server_ip_index], MAIN_SERVER_PORT);
+            if(clientSocket != -1) break;
+
+            server_ip_index = (server_ip_index+1)%server_ips.size();
+        }
+
+        int val = 1;
+        setsockopt(clientSocket, SOL_SOCKET, SO_KEEPALIVE, (char*)&val, sizeof(int));
+        setsockopt(clientSocket, IPPROTO_TCP, TCP_KEEPCNT, (char*)&val, sizeof(int));
+        setsockopt(clientSocket, IPPROTO_TCP, TCP_KEEPIDLE, (char*)&val, sizeof(int));
+        setsockopt(clientSocket, IPPROTO_TCP, TCP_KEEPINTVL, (char*)&val, sizeof(int));
+        
+        int err = 0;
+        
         // Get command
         char message[MESSAGE_MAX_SIZE] = { 0 };
 
@@ -164,59 +147,73 @@ int main(){
         }
         
         // Send command
-        send_all(clientSocket, message, MESSAGE_MAX_SIZE);
+        err = send_all(clientSocket, message, MESSAGE_MAX_SIZE);
+        if (err == -1) {print_connection_error(); continue;}
         
         // Send more info if needed (for 'add' command)
         if(strcmp(tokenized_message[0], "add") == 0){
             for(int i = 0; i<file_count; i++){
-                
                 //First send size
                 int file_size = get_file_size(file_descriptors[i]);
                 int* file_size_pointer = &file_size;
-                send_all(clientSocket, (char*)file_size_pointer, sizeof(int));
+                err = send_all(clientSocket, (char*)file_size_pointer, sizeof(int));
+                if (err == -1) {print_connection_error(); break;}
 
                 //Then send the actual file
                 char* file_contents = (char*) malloc(file_size*sizeof(char));
                 fread(file_contents, file_size, 1, file_descriptors[i]);
                 
-                send_all(clientSocket, file_contents, file_size);
+                err = send_all(clientSocket, file_contents, file_size);
                 free(file_contents);
+                if (err == -1) {print_connection_error(); break;}
             }
 
+            
             list_fclose(file_descriptors, file_count);
+            if (err == -1) {print_connection_error(); continue;}
+
             free(file_descriptors);
         }
 
         // Receive response
         char response_message[MESSAGE_MAX_SIZE] = { 0 };
-        recv_to_fill(clientSocket, response_message, MESSAGE_MAX_SIZE);
+        err = recv_to_fill(clientSocket, response_message, MESSAGE_MAX_SIZE);
+        if (err == -1) {print_connection_error(); continue;}
+
         std::cout << response_message << std::endl;
 
         // If the command was a get, receive files
         if(strcmp(tokenized_message[0], "get") == 0){
             int count;
-            recv_to_fill(clientSocket, (char*)&count, 4);
+            err = recv_to_fill(clientSocket, (char*)&count, 4);
+            if (err == -1) {print_connection_error(); continue;}
 
             for(int i = 0; i<count; i++){
                 char* file_name = 0;
                 int name_l = 0;
-                recv_length_then_message(clientSocket, &name_l, &file_name);
+                err = recv_length_then_message(clientSocket, &name_l, &file_name);
+                if (err == -1) {print_connection_error(); break;}
 
                 char* file_content = 0;
                 int file_size = 0;
-                recv_length_then_message(clientSocket, &file_size, &file_content);
+                err = recv_length_then_message(clientSocket, &file_size, &file_content);
+                if (err == -1) {print_connection_error(); break;}
 
                 FILE* file_descriptor = open_file_in_folder(file_name, "dload", "wb");
                 fwrite(file_content, file_size, 1, file_descriptor);
                 fclose(file_descriptor);
             }
+
+            if (err == -1) {print_connection_error(); continue;}
         }
 
+        // Free stuff and close the socket
         free_token_list(tokenized_message);
+        close(clientSocket);
     }
 
-    // Close the socket
-    close(clientSocket);
+    
+    
 
     return 0;
 }
