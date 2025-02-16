@@ -140,7 +140,7 @@ int main(int argc, char** argv){
     printf("%s\n", argv[4]);
 
     // Set node key and ip, and folder name
-    node_key = strtol(argv[5], NULL, 10);
+    node_key = atoi(argv[5]);
     node_ip = get_self_ip();
     
     // Get folder name and make folder
@@ -149,7 +149,7 @@ int main(int argc, char** argv){
 
     // Enter the network, set predecessor and successor
     if(strcmp(argv[4], "N") == 0){
-        int port = strtol(argv[3], NULL, 10);
+        int port = atoi(argv[3]);
         join_dht(argv[2], port);
     }else{
         predecessor_ip = node_ip;
@@ -161,7 +161,7 @@ int main(int argc, char** argv){
     // Create multicast send thread
     ip_and_port* args = (ip_and_port*) malloc(sizeof(ip_and_port));
     args->ip = argv[2];
-    args->port = strtol(argv[3], NULL, 10);
+    args->port = atoi(argv[3]);
     pthread_t listen_find_thread_id;
     pthread_create(&listen_find_thread_id, NULL, ping_dht_nodes, args);
 

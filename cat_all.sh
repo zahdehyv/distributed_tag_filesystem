@@ -1,16 +1,15 @@
 set +e
 sh close_all.sh
 
-rm -r ./exe_client/dload
 mkdir ./exe_client/dload
 
 set -e
 g++ chord_server_main.cpp -o exe_dht_server/dht_server.out -pthread
 g++ client.cpp -o exe_client/client.out -pthread
 g++ server.cpp -o exe_server/server.out -pthread
-#sudo docker buildx build . -f ./make_client_image.dockerfile -t filesystem_client
-#sudo docker buildx build . -f ./make_server_image.dockerfile -t filesystem_server
-#sudo docker buildx build . -f ./make_dht_server_image.dockerfile -t dht_server
+# sudo docker buildx build . -f ./make_client_image.dockerfile -t filesystem_client
+# sudo docker buildx build . -f ./make_server_image.dockerfile -t filesystem_server
+# sudo docker buildx build . -f ./make_dht_server_image.dockerfile -t dht_server
 
 sh turn_router_on.sh
 

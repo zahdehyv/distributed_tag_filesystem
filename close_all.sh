@@ -22,3 +22,5 @@ docker remove -f files_to_tags_dht_server0
 docker remove -f files_to_tags_dht_server1
 docker remove -f files_to_tags_dht_server2
 docker remove -f files_to_tags_dht_server3
+
+rm -r ./exe_client/dload
