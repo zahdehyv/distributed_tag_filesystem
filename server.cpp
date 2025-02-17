@@ -37,6 +37,8 @@ std::vector<char*> get_file_names_from_query(char** command, in_addr tags_to_fil
         it += 1;
     }
 
+    printf("1\n");
+
     // Get separated file lists and intersect them
     std::vector<char*> file_names;
     for(int i = 0; i<query_tags.size(); i++){

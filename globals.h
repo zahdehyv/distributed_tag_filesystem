@@ -8,6 +8,8 @@
 #include <vector>
 #include <iostream>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
+#include <dirent.h>
 
 #define MESSAGE_MAX_SIZE 10000
 #define MAX_TOKEN_SIZE 200
@@ -15,6 +17,9 @@
 
 
 #define DHT_COMMAND_PORT 8080
+#define DHT_HEART_BEAT_PORT 3020
+
+#define DHT_FAULT_TOLERANCE_LEVEL 2
 
 //Returns a list of strings, each one a token. The real list ends when a char* = null is found.
 char** tokenize_command(char* command){
@@ -214,7 +219,7 @@ int recv_length_then_message(int sock, int* size, char** message){
 }
 
 #define DHT_KEY_MODULE 256
-int hash_string(char* str){
+int hash_string(const char* str){
     char c = str[0];
     int i = 0;
     int h = 0;
@@ -266,10 +271,31 @@ int connect_to_sever_by_ip(in_addr ip, int port){
 
         if(error!=0){
             std::cout << "ERROR AL INTENTAR CONECTARSE CON EL SERVIDOR!!!" << std::endl;
+            usleep(1000000);
             continue;
         }else{
             return clientSocket;
         }
+    }
+}
+
+int try_connect_to_sever_by_ip(in_addr ip, int port){
+
+    int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+    struct sockaddr_in address = {};
+    address.sin_family = AF_INET;
+    address.sin_addr = ip;
+    address.sin_port = htons(port);
+    
+    int val = 1;
+    setsockopt(clientSocket, IPPROTO_TCP, TCP_SYNCNT, &val, sizeof(int));
+
+    int error = connect(clientSocket, (struct sockaddr*)&address, sizeof(address));
+    if(error!=0){
+        return -1;
+    }else{
+        return clientSocket;
     }
 }
 
@@ -351,4 +377,36 @@ void list_to_file_lines(std::vector<char*> l, char** contents, int* size){
 
 void print_connection_error(){
     std::cout << "CONNECTION ERROR!!!" << std::endl;
+}
+
+void print_list(std::vector<int> l){
+    printf("{");
+    for(int i = 0; i<l.size(); i++){
+        printf("%i,", l[i]);
+    }
+    printf("}\n");
+}
+
+void shift_left_ereasing_index(std::vector<int>* l, int i_i, int def){
+    for(int i = i_i+1; i<l->size(); i++){
+        (*l)[i-1] = (*l)[i];
+    }
+    (*l)[l->size()-1] = def;
+}
+
+void shift_left_ereasing_index(std::vector<in_addr>* l, int i_i, in_addr def){
+    for(int i = i_i+1; i<l->size(); i++){
+        (*l)[i-1] = (*l)[i];
+    }
+    (*l)[l->size()-1] = def;
+}
+
+bool is_in_between_modular(int n, int a, int b){
+    if(a < b){
+        if(a < n && n <= b) return true;
+    }else if(b < a){
+        if(a < n || n <= b) return true;
+    }
+
+    return false;
 }
